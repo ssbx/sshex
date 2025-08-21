@@ -1,0 +1,223 @@
+#!/usr/bin/bash -l
+# next line ignored by tclsh \
+exec tclsh "$0" ${1+"$@"}
+
+package require Expect
+package require inifile
+
+array set cfg {}
+
+set fd [::ini::open [ file join $::env(HOME) .local share sshe config.ini ] ]
+set cfg(hostfile) [ file join $::env(HOME) .local share sshe autocomp.hosts ]
+set cfg(bashrc)   [ file join $::env(HOME) .local share sshe autocomp.bashrc ]
+set cfg(uname)    [::ini::value $fd sshe user]
+set cfg(password) [::ini::value $fd sshe password]
+set cfg(networks) [::ini::value $fd sshe networks]
+::ini::close $fd
+
+proc get_bool_arg key {
+  if {[lsearch -regexp $::argv "^$key"] >= 0} {
+    return 1
+  } else {
+    return 0
+  }
+}
+
+proc get_value_arg {key def} {
+  set arg_id [ lsearch -regexp $::argv "^$key=" ]
+  if {$arg_id == -1} {
+    return $def
+  } else {
+    set arg_str [lindex $::argv $arg_id ]
+    return [lindex [split $arg_str =] 1]
+  }
+}
+
+proc print_verbose msg {
+  if {$::cfg(verbose)} { puts "sshe-verbose: $msg" }
+}
+proc print_info msg {
+  puts "sshe-info: $msg"
+}
+proc print_error msg {
+  puts stderr "sshe-error: $msg"
+}
+proc print_warn msg {
+  puts stderr "sshe-warning: $msg"
+}
+#------------------------------------------------------------------------------
+
+array set opts {} 
+set opts(genhosts)    [ get_bool_arg "--sshe-genhosts"]
+set opts(verbose)     [ get_bool_arg "-v"]
+set opts(help)        [ get_bool_arg "-h"]
+set opts(donotclose)  [ get_bool_arg  "--sshe-donotclose" ]
+set opts(script)      [ get_value_arg "--sshe-script" 0]
+set opts(sshbin)      [ get_value_arg "--sshe-bin" ssh]
+set opts(prompt)      [ get_value_arg "--sshe-prompt" ".*#"]
+set opts(sshargv)     [lsearch -regexp -all -inline -not $argv "^--sshe*"]
+
+if { $opts(help) } {
+  puts "sshe \[SSHE_OPTIONS\] \[SSH_OPTIONS\]"
+  puts ""
+  puts "Toutes les options ssh sont transmises à l'executable ssh, les options"
+  puts "qui commencent par --sshe-* sont retirée avant."
+  puts ""
+  puts "OPTIONS reconnues par sshe et transmise à ssh:"
+  puts "  -v  Verbose"
+  puts "  -h  Print help"
+  puts ""
+  puts "OPTIONS reconnues par sshe retirées d'argv avant appel a commande ssh"
+  puts "  --sshe-bin        Executable ssh à utiliser"
+  puts "  --sshe-script     Fichier expect à sourcer apres le login"
+  puts "  --sshe-donotclose Ne pas clore le terminal en cas de deconnection"
+  puts ""
+  exit 0
+}
+#------------------------------------------------------------------------------
+
+
+if {$opts(genhosts)} {
+
+  try {
+    exec which nmap
+  } trap CHILDSTATUS {results options} {
+    print_error "la commande \"nmap\" n'a pas été trouvée dans le PATH"
+    exit 1
+  }
+
+  set net_list    [ split [ string trim $cfg(networks) "," ] "," ]
+  set fd [file tempfile net_filename]
+  close $fd
+  puts [exec nmap -p 22 {*}${net_list} -oG $net_filename]
+  exec cat $net_filename \
+    | grep "Status: Up" | grep -v "()" \
+    | awk "{ print \$3 }" \
+    | sed "s/^(//" | sed "s/)$//" | sort -u > $cfg(hostfile)
+  exec cat $net_filename \
+    | grep "Status: Up" | grep "()" \
+    | awk "{ print \$2 }" | sort -u >> $cfg(hostfile)
+
+  exit 0
+}
+
+
+
+
+#-------------------------------------------------------------------------
+#-------------------------------------------------------------------------
+#----- PORTION SSH EXPECT ------------------------------------------------
+#-------------------------------------------------------------------------
+#-------------------------------------------------------------------------
+proc fail_with {msg code} {
+  global expect_out
+  global buffer
+  puts stderr "sshe: failed when reaching $msg at $code"
+  puts stderr $expect_out(buffer)
+  exit $code
+}
+
+match_max -d 5000000
+
+log_user 0
+if { $opts(script) == 0 } {
+  log_user 1
+}
+
+try {
+  exec which $opts(sshbin)
+} trap CHILDSTATUS {results options} {
+  send_user "la commande \"$opts(sshbin)\" n'a pas été trouvée dans le PATH\n"
+  send_user "taper Return pour quiter\n"
+  expect "\n" { exit 1 }
+}
+
+
+set closed 0
+while {1} {
+
+  spawn $opts(sshbin) -l $cfg(uname) {*}${opts(sshargv)}
+
+  set timeout 5
+
+  expect {
+
+    # standard style (cisco)
+    -re "^.*password: "  {
+      send "$cfg(password)\r"
+    }
+    -re "^.*Password: "  {
+      send "$cfg(password)\r"
+    }
+    # alcatel style
+    -re "^.*password.*keyboard-interactive method:"  {
+      send "$cfg(password)\r"
+    }
+    # allied style
+    -re "User Name:" {
+      send "$cfg(uname)\r"
+      expect {
+        -re "Password:" {
+          send "$cfg(password)\r"
+        }
+        timeout {
+          send_user "sshe n'a pas reconnus de prompt password pour cet hote"
+          send_user "taper Return pour quiter\n"
+          set timeout -1
+          expect_user "\n" { exit 1 }
+        }
+        eof {
+          send_user "ssh eof"
+          send_user $expect_out(buffer)
+          send_user "taper Return pour quiter\n"
+          set timeout -1
+          expect_user "\n" { exit 1 }
+        }
+      }
+    }
+
+    # timeout
+    timeout {
+      send_user "sshe n'a pas reconnus de prompt username ou password pour cet hote"
+      send_user "taper Return pour quiter\n"
+      set timeout -1
+      expect_user "\n" { exit 1 }
+    }
+
+    # ssh pas lancé erreur
+    eof {
+      send_user $expect_out(buffer)
+      send_user "taper Return pour quiter\n"
+      set timeout -1
+      expect_user "\n" { exit 1 }
+    }
+  }
+
+  # on détermine le bon prompt
+  expect {
+    -re "^.*>" {
+      # hp/alcatel prompt
+      set opts(prompt) "^.*>"
+    }
+    -re ".*#" {
+      # cisco/allied/dell, déja mis
+      set opts(prompt) ".*#"
+    }
+  }
+
+  if { $opts(script) != 0 } {
+    source $opts(script)
+    ::script::run 
+  } else {
+    interact 
+    if { $opts(donotclose) } {
+      send_user "\n==> sshe-donotclose RECONNECT(Return) or QUIT(Ctrl-D)? "
+      set timeout -1 
+      expect_user {
+        "\n" continue
+        \002 exit
+      }
+    }    
+  }
+  break
+}

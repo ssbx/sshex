@@ -1,0 +1,118 @@
+#!/bin/sh
+
+version="1.0"
+srcdir="$PWD"
+prefix="/usr/local"
+bindir="$prefix/bin"
+datadir="$prefix/share/sshe"
+mandir="$prefix/share/man"
+  
+print_version () {
+  echo $version
+}
+
+print_help () {
+  echo "$version
+Usage: ./configure [OPTION]... 
+Defaults for the options are specified in brackets.
+
+Configuration:
+  -h, --help              display this help and exit
+  -V, --version           display version information and exit
+      --srcdir=DIR        find the sources in DIR [configure dir or '.']
+
+Installation directories:
+  --prefix=PREFIX         install architecture-independent files in PREFIX
+                          [/usr/local]
+
+By default, 'make install' will install all the files in
+'/usr/local/bin', '/usr/local/lib' etc.  You can specify
+an installation prefix other than '/usr/local' using '--prefix',
+for instance '--prefix=\$HOME'.
+
+For better control, use the options below.
+
+Fine tuning of the installation directories:
+  --bindir=DIR            user executables [EPREFIX/bin]
+  --mandir=DIR            manual           [EPREFIX/share/man]
+  --datadir=DIR           read-only data-directory      [PREFIX/share/sshe]
+"
+}
+
+read_args () {
+
+  opt_srcdir=""
+  opt_prefix=""
+  opt_bindir=""
+  opt_mandir=""
+  opt_datadir=""
+
+  for arg in "$@"; do
+    case $arg in
+      --version,-V)   print_version; exit;;
+      --help,-h)      print_help; exit;;
+      --srcdir=*)     opt_srcdir=$(echo -n $arg | sed 's/--srcdir=\(.*\)/\1/');;
+      --prefix=*)     opt_prefix=$(echo -n $arg | sed 's/--prefix=\(.*\)/\1/');;
+      --bindir=*)     opt_bindir=$(echo -n $arg | sed 's/--bindir=\(.*\)/\1/');;
+      --mandir=*)     opt_mandir=$(echo -n $arg | sed 's/--mandir=\(.*\)/\1/');;
+      --datadir=*)    opt_datadir=$(echo -n $arg | sed 's/--datadir=\(.*\)/\1/');;
+    esac
+  done
+  
+  if [ -n "$opt_prefix" ]; then
+    prefix="$opt_prefix"
+    bindir="$prefix/bin"
+    mandir="$prefix/man"
+    datadir="$prefix/share/sshe"
+  fi
+  if [ -n "$opt_srcdir" ];  then srcdir="opt_srcdir"; fi
+  if [ -n "$opt_bindir" ];  then bindir="opt_bindir"; fi
+  if [ -n "$opt_mandir" ];  then mandir="opt_mandir"; fi
+  if [ -n "$opt_datadir" ]; then datadir="opt_datadir"; fi
+
+}
+
+check_tcllib () {
+  echo "if {[catch {package require $1}]} {exit 1} else {exit 0}" | tclsh
+}
+
+check_deps () {
+  if $(which ssh > /dev/null); then
+    echo "check_deps OK: ssh binary found"
+  else
+    echo "check_deps ERROR: ssh binary not found" 
+    exit 1
+  fi
+  if $(which tclsh > /dev/null); then
+    echo "check_deps OK: tclsh found"
+  else
+    echo "check_deps ERROR: tclsh not found" 
+    exit 1
+  fi
+  if $(check_tcllib Expect); then
+    echo "check_deps OK: tcl Expect lib found"
+  else
+    echo "check_deps ERROR: tcl Expect not found" 
+    exit 1
+  fi
+  if $(check_tcllib inifile); then
+    echo "check_deps OK: tcl inifile lib found"
+  else
+    echo "check_deps ERROR: tcl inifile not found" 
+    exit 1
+  fi
+}
+
+write_status () {
+  echo "# Auto generated file. Use configure to modify configuration" > config.status
+  echo "prefix=$prefix
+srcdir=$srcdir
+bindir=$bindir
+mandir=$mandir
+datadir=$datadir" | tee config.status
+}
+
+read_args
+check_deps 
+write_status
+
