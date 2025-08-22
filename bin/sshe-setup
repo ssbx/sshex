@@ -1,5 +1,0 @@
-#!/usr/bin/bash -l
-# next line ignored by tclsh \
-exec tclsh "$0" ${1+"$@"}
-
-package require inifile

@@ -4,7 +4,7 @@ version="1.0"
 srcdir="$PWD"
 prefix="/usr/local"
 bindir="$prefix/bin"
-datadir="$prefix/share/sshe"
+datadir="$prefix/share/sshex"
 mandir="$prefix/share/man"
   
 print_version () {
@@ -116,3 +116,10 @@ read_args
 check_deps 
 write_status
 
+
+cat config.mk.in | sed "
+s#@prefix@#$prefix#
+s#@srcdir@#$srcdir#
+s#@bindir@#$bindir#
+s#@mandir@#$mandir#
+s#@datadir@#$datadir#" > config.mk
