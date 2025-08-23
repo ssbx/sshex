@@ -4,7 +4,7 @@ version="1.0"
 srcdir="$PWD"
 prefix="/usr/local"
 bindir="$prefix/bin"
-datadir="$prefix/share/sshex"
+datadir="$prefix/share/xshx"
 mandir="$prefix/share/man"
 
 print_version () {
@@ -35,7 +35,7 @@ For better control, use the options below.
 Fine tuning of the installation directories:
   --bindir=DIR            user executables [EPREFIX/bin]
   --mandir=DIR            manual           [EPREFIX/share/man]
-  --datadir=DIR           read-only data-directory      [PREFIX/share/sshe]
+  --datadir=DIR           read-only data-directory      [PREFIX/share/xsh]
 "
 }
 
@@ -63,7 +63,7 @@ read_args () {
     prefix="$opt_prefix"
     bindir="$prefix/bin"
     mandir="$prefix/man"
-    datadir="$prefix/share/sshe"
+    datadir="$prefix/share/xsh"
   fi
   if [ -n "$opt_srcdir" ];  then srcdir="opt_srcdir"; fi
   if [ -n "$opt_bindir" ];  then bindir="opt_bindir"; fi
