@@ -1,5 +1,0 @@
-prefix  = @prefix@
-srcdir  = @srcdir@
-bindir  = @bindir@
-mandir  = @mandir@
-datadir = @datadir@

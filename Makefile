@@ -1,7 +1,10 @@
+srcdir  = $(PWD)
+prefix  = $(HOME)/.local
+bindir  = $(prefix)/bin
+mandir  = $(prefix)/share/man
+datadir = $(prefix)/share
 
-include config.mk
 SHELL = /bin/sh
-
 
 .PHONY: all
 all:
@@ -25,8 +28,6 @@ default: test2
 	#if [ ! -f $(XSH_DIR)/config.ini ]; then \
 	#install -T -m 600 $(PWD)/config.ini $(XSH_DIR)/config.ini; fi
 
-install: config.mk
-
 autocomp-hosts:
 	xsh --xsh-genhosts
 
@@ -46,5 +47,5 @@ dev-clean:
 	rm $(HOME)/.local/share/xsh/autocomp.bashrc
 
 clean:
-	rm config.status
+
 
